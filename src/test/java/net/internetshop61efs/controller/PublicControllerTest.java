@@ -19,10 +19,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
 
-import static org.hamcrest.core.StringContains.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -41,27 +41,29 @@ class PublicControllerTest {
     private ConfirmationCodeRepository confirmationCodeRepository;
 
     @BeforeEach
-    void setUp() {
+    void setUp(){
         User testUser = new User();
         testUser.setFirstName("user1");
         testUser.setLastName("user1");
-        testUser.setEmail("user1@company.com");
+        testUser.setEmail("user1@gmail.com");
+        testUser.setHashPassword("Pass12345!");
         testUser.setRole(User.Role.USER);
-        testUser.setStatus(User.Status.NOT_CONFIRMED);
+        testUser.setState(User.State.NOT_CONFIRMED);
         User savedUser = userRepository.save(testUser);
 
-        ConfirmationCode confirmationCode = new ConfirmationCode();
-        confirmationCode.setCode("code for test");
-        confirmationCode.setUser(savedUser);
-        confirmationCode.setExpireDateTime(LocalDateTime.now().plusDays(1));
-        confirmationCodeRepository.save(confirmationCode);
+        ConfirmationCode code = new ConfirmationCode();
+        code.setCode("someConfirmationCode");
+        code.setUser(savedUser);
+        code.setExpiredDataTime(LocalDateTime.now().plusDays(1));
+        confirmationCodeRepository.save(code);
     }
 
     @AfterEach
-    void drop() {
+    void drop(){
         confirmationCodeRepository.deleteAll();
         userRepository.deleteAll();
     }
+
 
     @Test
     void testRegisterUser() throws Exception {
@@ -69,45 +71,41 @@ class PublicControllerTest {
                 {
                 "firstName":"John",
                 "lastName":"John",
-                "email":"john@company.com",
+                "email":"john@gmail.com",
                 "hashPassword":"Pass12345!"
                 }
                 """;
-        String requestPath = "/api/public/new";
 
-        mockMvc.perform(
-                        post(requestPath)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(newUserJson))
+        String requestPath = "/api/public/register";
+
+        mockMvc.perform(post(requestPath)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(newUserJson))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.email").value("john@company.com"))
+                .andExpect(jsonPath("$.email").value("john@gmail.com"))
                 .andExpect(jsonPath("$.role").value("USER"));
-
-
-
     }
 
     @Test
-    void testReturn400ForBadEmailFormat() throws Exception {
+    void testReturn400ForBadFormatEmail() throws Exception {
         String newUserJson = """
                 {
                 "firstName":"John",
                 "lastName":"John",
-                "email":"badFormatForEmail",
+                "email":"badFormatEmail",
                 "hashPassword":"Pass12345!"
                 }
                 """;
-        String requestPath = "/api/public/new";
 
-        mockMvc.perform(
-                        post(requestPath)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(newUserJson))
+        String requestPath = "/api/public/register";
+
+        mockMvc.perform(post(requestPath)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newUserJson))
                 .andExpect(status().isBadRequest())
-                .andExpect(content().string(containsString("должно иметь формат адреса электронной почты")));
+                .andExpect(jsonPath("$.errors[0].rejectedValue").value("badFormatEmail"));
 
     }
-
 
     @Test
     void testReturn409ForExistEmail() throws Exception {
@@ -115,31 +113,39 @@ class PublicControllerTest {
                 {
                 "firstName":"John",
                 "lastName":"John",
-                "email":"user1@company.com",
+                "email":"user1@gmail.com",
                 "hashPassword":"Pass12345!"
                 }
                 """;
-        String requestPath = "/api/public/new";
-        String errorMessage = "User with email: user1@company.com is already exist";
+
+        String requestPath = "/api/public/register";
+        String errorMessage = "Пользователь с email: user1@gmail.com уже зарегистрирован";
 
         mockMvc.perform(post(requestPath)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(newUserJson))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newUserJson))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").value(errorMessage));
+
+
     }
 
     @Test
     void testConfirmRegistration() throws Exception {
-        String requestPath = "/api/public/code/confirmation";
-        String requestParamName = "codeConfirmation";
-        String requestParamValue = "code for test";
-        String expectedValue = "user1@company.com";
+
+        String requestPath = "/api/public/confirm";
+        String requestParamName = "code";
+        String requestParamValue = "someConfirmationCode";
+        String expectedValue = "user1@gmail.com";
 
         mockMvc.perform(get(requestPath)
-                .param(requestParamName, requestParamValue))
+                .param(requestParamName,requestParamValue))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value(expectedValue));
     }
+
+
+
+
 
 }

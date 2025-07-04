@@ -6,15 +6,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
 
-public interface UserRepository extends JpaRepository<User, Integer> {
+public interface UserRepository extends JpaRepository<User, Long> {
 
-    // метод для проверки в процеесе регистрации нового пользователя
-    boolean existsByEmail(String email);
-
-    // метод для ответа на запрос: "предоставьте данные о пользователе с таким-то email"
     Optional<User> findByEmail(String email);
 
+    boolean existsByEmail(String email);
 
-    List<User> findByLastName(String lastName);
+    List<User> findAll();
 
 }

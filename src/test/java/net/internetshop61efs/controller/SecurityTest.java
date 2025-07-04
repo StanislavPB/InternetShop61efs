@@ -22,41 +22,42 @@ import java.time.LocalDateTime;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+
 @SpringBootTest
 @AutoConfigureMockMvc
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @TestPropertySource(locations = "classpath:application-test.yml")
-class SecurityControllerTest {
+public class SecurityTest {
 
     @Autowired
     private MockMvc mockMvc;
-
     @Autowired
     private UserRepository userRepository;
-
     @Autowired
     private ConfirmationCodeRepository confirmationCodeRepository;
 
+
     @BeforeEach
-    void setUp() {
+    void setUp(){
         User testUser = new User();
         testUser.setFirstName("user1");
         testUser.setLastName("user1");
-        testUser.setEmail("user1@company.com");
+        testUser.setEmail("user1@gmail.com");
+        testUser.setHashPassword("Pass12345!");
         testUser.setRole(User.Role.USER);
-        testUser.setStatus(User.Status.NOT_CONFIRMED);
+        testUser.setState(User.State.NOT_CONFIRMED);
         User savedUser = userRepository.save(testUser);
 
-        ConfirmationCode confirmationCode = new ConfirmationCode();
-        confirmationCode.setCode("code for test");
-        confirmationCode.setUser(savedUser);
-        confirmationCode.setExpireDateTime(LocalDateTime.now().plusDays(1));
-        confirmationCodeRepository.save(confirmationCode);
+        ConfirmationCode code = new ConfirmationCode();
+        code.setCode("someConfirmationCode");
+        code.setUser(savedUser);
+        code.setExpiredDataTime(LocalDateTime.now().plusDays(1));
+        confirmationCodeRepository.save(code);
     }
 
     @AfterEach
-    void drop() {
+    void drop(){
         confirmationCodeRepository.deleteAll();
         userRepository.deleteAll();
     }
@@ -64,40 +65,43 @@ class SecurityControllerTest {
     @Test
     public void testWhenNoAuthenticationThenReturn403Users() throws Exception {
         String requestPath = "/api/users";
-
         mockMvc.perform(get(requestPath)
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isForbidden());
+
     }
 
     @Test
-    public void testWhenNoAuthenticationThenReturn403Admin() throws Exception {
-        String requestPath = "/api/admin/full";
-
+    public void testWhenNoAuthenticationThenReturn403Admins() throws Exception {
+        String requestPath = "/api/admins/users";
         mockMvc.perform(get(requestPath)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isForbidden());
+
     }
 
 
     @Test
-    @WithMockUser(username = "user", roles = {"USER"})
+    @WithMockUser(username = "user",roles = {"USER"})
     public void testWhenNoAuthorizeRoleThenReturn403Admins() throws Exception {
-        String requestPath = "/api/admin/full";
-
+        String requestPath = "/api/admins/users";
         mockMvc.perform(get(requestPath)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isForbidden());
+
     }
 
     @Test
-    @WithMockUser(username = "admin", roles = {"ADMIN"})
+    @WithMockUser(username = "admin",roles = {"ADMIN"})
     public void testWhenReturn200ForAdminRequest() throws Exception {
-        String requestPath = "/api/admin/full";
-
+        String requestPath = "/api/admins/users";
         mockMvc.perform(get(requestPath)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
+
     }
+
+
+
 
 }

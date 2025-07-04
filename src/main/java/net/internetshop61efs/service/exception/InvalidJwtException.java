@@ -1,4 +1,5 @@
-package net.internetshop61efs.security.service;
+package net.internetshop61efs.service.exception;
+
 
 import org.springframework.security.core.AuthenticationException;
 

@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+
 @SpringBootTest
 @AutoConfigureMockMvc
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -31,35 +32,33 @@ public class UserServiceTest {
 
     @Autowired
     private MockMvc mockMvc;
-
     @Autowired
     private UserRepository userRepository;
-
+    @Autowired
+    private ConfirmationCodeRepository confirmationCodeRepository;
     @Autowired
     private UserService userService;
 
-    @Autowired
-    private ConfirmationCodeRepository confirmationCodeRepository;
-
     @BeforeEach
-    void setUp() {
+    void setUp(){
         User testUser = new User();
         testUser.setFirstName("user1");
         testUser.setLastName("user1");
-        testUser.setEmail("user1@company.com");
+        testUser.setEmail("user1@gmail.com");
+        testUser.setHashPassword("Pass12345!");
         testUser.setRole(User.Role.USER);
-        testUser.setStatus(User.Status.NOT_CONFIRMED);
+        testUser.setState(User.State.NOT_CONFIRMED);
         User savedUser = userRepository.save(testUser);
 
-        ConfirmationCode confirmationCode = new ConfirmationCode();
-        confirmationCode.setCode("code for test");
-        confirmationCode.setUser(savedUser);
-        confirmationCode.setExpireDateTime(LocalDateTime.now().plusDays(1));
-        confirmationCodeRepository.save(confirmationCode);
+        ConfirmationCode code = new ConfirmationCode();
+        code.setCode("someConfirmationCode");
+        code.setUser(savedUser);
+        code.setExpiredDataTime(LocalDateTime.now().plusDays(1));
+        confirmationCodeRepository.save(code);
     }
 
     @AfterEach
-    void drop() {
+    void drop(){
         confirmationCodeRepository.deleteAll();
         userRepository.deleteAll();
     }
@@ -69,11 +68,14 @@ public class UserServiceTest {
         UserRequestDto requestDto = new UserRequestDto(
                 "firstUserName",
                 "lastUserName",
-                "user1@company.com",
-                "pass12345!"
+                "user1@gmail.com",
+                "Pass12345!"
         );
 
         assertThrows(AlreadyExistException.class, () -> userService.registration(requestDto));
+
     }
+
+
 
 }

@@ -6,13 +6,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.demointernetshop45efs.security.service.CustomUserDetailService;
-import org.demointernetshop45efs.security.service.InvalidJwtException;
-import org.demointernetshop45efs.security.service.JwtTokenProvider;
+import net.internetshop61efs.security.service.CustomUserDetailService;
+import net.internetshop61efs.security.service.JwtTokenProvider;
+import net.internetshop61efs.service.exception.InvalidJwtException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -25,34 +26,34 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final CustomUserDetailService customUserDetailService;
+    private final AuthenticationEntryPoint authenticationEntryPoint;
 
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+        try {
+            String jwt = tokenFromRequest(request);
 
-        try{
-            String jwt = getTokenFromRequest(request);
+            log.info("токен: " + jwt);
 
-            if (jwt != null && jwtTokenProvider.validateToken(jwt)){
-                String userName = jwtTokenProvider.getUsernameFromJwt(jwt);
+            if (jwt != null && jwtTokenProvider.validateToken(jwt)) {
+                String userName = jwtTokenProvider.getUserNameFromJwt(jwt);
                 UserDetails userDetails = customUserDetailService.loadUserByUsername(userName);
                 Authentication authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         } catch (InvalidJwtException e){
-            log.error("ОШИБКА !!! " + e.getMessage());
+            log.error("ОШИБКА!!!! " + e.getMessage());
+            authenticationEntryPoint.commence(request,response,e);
             return;
         }
 
         filterChain.doFilter(request,response);
+
     }
 
-    private String getTokenFromRequest(HttpServletRequest request){
-
+    private String tokenFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
-        // если в запросе есть jwt, то тогда в запросе будет присутствовать
-        // строка, которая выглядит так: "Bearer jkhadfgvckajdsfgvkuweyftiusddhjsfvjahfvbjk"
-        // то есть нам надо из этой строки взять все до конца начиная с первого символа после "Bearer "
 
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);

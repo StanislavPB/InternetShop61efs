@@ -1,7 +1,8 @@
 package net.internetshop61efs.security.service;
 
 import lombok.RequiredArgsConstructor;
-import org.demointernetshop45efs.repository.UserRepository;
+import net.internetshop61efs.entity.User;
+import net.internetshop61efs.service.UserService;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -11,13 +12,14 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class CustomUserDetailService implements UserDetailsService {
 
-    private final UserRepository repository;
+    private final UserService userService;
 
 
     @Override
-    public UserDetails loadUserByUsername(String userEmail) throws UsernameNotFoundException {
-        return repository.findByEmail(userEmail)
-                .map(user -> new MyUserToUserDetails(user))
-                .orElseThrow(() -> new UsernameNotFoundException("User with email " + userEmail + " not found"));
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        User foundedUser = userService.findByEmail(email);
+        UserDetails userDetails = new UserToUserDetails(foundedUser);
+        return userDetails;
+
     }
 }

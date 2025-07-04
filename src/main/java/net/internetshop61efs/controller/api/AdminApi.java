@@ -1,29 +1,27 @@
 package net.internetshop61efs.controller.api;
 
-import net.internetshop61efs.dto.UserRequestDto;
 import net.internetshop61efs.dto.UserResponseDto;
+import net.internetshop61efs.entity.ConfirmationCode;
 import net.internetshop61efs.entity.User;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+
 import java.util.List;
 
-@RequestMapping("/api/admin")
+@RequestMapping("/api/admins")
 public interface AdminApi {
 
-    //* найти всех пользователей (полная информация - для ADMIN)
-    @GetMapping("/full")
-    public ResponseEntity<List<User>> findAllFullDetails();
-
-
-    //* найти всех пользователей (ограниченная информация - для MANAGER)
-    @GetMapping("/manager/all")
+    @GetMapping("/users")
     public ResponseEntity<List<UserResponseDto>> findAll();
 
+    @GetMapping("/users/fullDetails")
+    public ResponseEntity<List<User>> findAllFull();
 
-    // * обновить данные от имени пользователь (пользователь хочет
-    // поменять какие-то данные в своем профиле)
-    @PutMapping("/update")
-    public ResponseEntity<UserResponseDto> updateUser(@RequestBody UserRequestDto request);
+    @GetMapping("/users/codes")
+    public ResponseEntity<List<ConfirmationCode>> findAllCodes(@RequestParam String email);
+
 
 
 }

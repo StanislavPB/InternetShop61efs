@@ -8,63 +8,48 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.ui.freemarker.FreeMarkerTemplateUtils;
 
-import java.io.StringWriter;
+import javax.sound.midi.MidiMessage;
 import java.util.HashMap;
 import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class MailUtil {
-
     private final Configuration freemakerConfiguration;
     private final JavaMailSender javaMailSender;
 
-    private String createConfirmationMail(String firstName, String lastName, String link) {
-
+    private String createConfirmationMail(String firstName, String lastName, String link){
         try {
             Template template = freemakerConfiguration.getTemplate("confirm_registration_mail.ftlh");
 
-            Map<String, Object> dataForFillTemplateField = new HashMap<>();
-            dataForFillTemplateField.put("firstName", firstName);
-            dataForFillTemplateField.put("lastName", lastName);
-            dataForFillTemplateField.put("link", link);
+            Map<Object,Object> model = new HashMap<>();
+            model.put("firstName", firstName);
+            model.put("lastName", lastName);
+            model.put("link", link);
 
-            // генерация HTML с использованием шаблона
+            String emailContext = FreeMarkerTemplateUtils.processTemplateIntoString(template, model);
 
-            String htmlBody = "";
+            return emailContext;
 
-            StringWriter writer = new StringWriter();
-            template.process(dataForFillTemplateField, writer);
-
-            htmlBody = writer.toString();
-
-            return htmlBody;
-
-        } catch (Exception e) {
-            throw new IllegalStateException("Ошибка при создании письма: " + e.getMessage());
+        } catch (Exception e){
+            throw new IllegalStateException();
         }
     }
 
-    public void sendMail(String firstName, String lastName, String link, String subject, String email) {
-
+    public void send(String firstName, String lastName, String link, String subject, String email){
         MimeMessage message = javaMailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
-
-        String textMessageHtml = createConfirmationMail(firstName, lastName, link);
 
         try {
             helper.setTo(email);
             helper.setSubject(subject);
-            helper.setText(textMessageHtml, true);
-
-        } catch (MessagingException e) {
-            throw new IllegalStateException("Ошибка при создании письма: " + e.getMessage());
+            helper.setText(createConfirmationMail(firstName, lastName, link), true);
+        } catch (MessagingException e){
+            throw new IllegalStateException();
         }
 
         javaMailSender.send(message);
-
-
     }
-
 }

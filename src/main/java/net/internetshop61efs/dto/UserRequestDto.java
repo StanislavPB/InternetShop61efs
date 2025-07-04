@@ -1,9 +1,7 @@
 package net.internetshop61efs.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,15 +13,14 @@ import lombok.NoArgsConstructor;
 @Builder
 public class UserRequestDto {
 
-    @NotBlank(message = "First name is required and must be not blank")
-    @Size(min = 3, max = 15, message = "First name length not correct")
+    @NotBlank
     private String firstName;
-
+    @NotBlank
     private String lastName;
-
     @Email
+    @NotBlank
     private String email;
-
-    private String password;
+    @NotBlank
+    private String hashPassword;
 
 }

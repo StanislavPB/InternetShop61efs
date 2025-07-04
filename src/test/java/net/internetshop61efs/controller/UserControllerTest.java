@@ -20,9 +20,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
 
-import static org.hamcrest.core.StringContains.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -30,14 +30,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 @TestPropertySource(locations = "classpath:application-test.yml")
 class UserControllerTest {
-
-
     @Autowired
     private MockMvc mockMvc;
-
     @Autowired
     private UserRepository userRepository;
-
     @Autowired
     private ConfirmationCodeRepository confirmationCodeRepository;
 
@@ -46,16 +42,19 @@ class UserControllerTest {
         User testUser = new User();
         testUser.setFirstName("user1");
         testUser.setLastName("user1");
-        testUser.setEmail("user1@company.com");
+        testUser.setEmail("user1@gmail.com");
+        testUser.setHashPassword("Pass12345!");
         testUser.setRole(User.Role.USER);
-        testUser.setStatus(User.Status.NOT_CONFIRMED);
+        testUser.setState(User.State.NOT_CONFIRMED);
         User savedUser = userRepository.save(testUser);
 
-        ConfirmationCode confirmationCode = new ConfirmationCode();
-        confirmationCode.setCode("code for test");
-        confirmationCode.setUser(savedUser);
-        confirmationCode.setExpireDateTime(LocalDateTime.now().plusDays(1));
-        confirmationCodeRepository.save(confirmationCode);
+        // System.out.println(savedUser);
+
+        ConfirmationCode code = new ConfirmationCode();
+        code.setCode("someConfirmationCode");
+        code.setUser(savedUser);
+        code.setExpiredDataTime(LocalDateTime.now().plusDays(1));
+        confirmationCodeRepository.save(code);
     }
 
     @AfterEach
@@ -67,42 +66,44 @@ class UserControllerTest {
 
     @Test
     @WithMockUser(username = "user", roles = {"USER"})
-    void testGetUserByIdWhenIdCorrect() throws Exception {
+    void testGetUserByIdWhenIDCorrect() throws Exception {
         String requestPath = "/api/users/1";
 
         mockMvc.perform(get(requestPath)
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.email").value("user1@company.com"));
-
+                .andExpect(jsonPath("$.email").value("user1@gmail.com"));
 
     }
 
     @Test
     @WithMockUser(username = "user", roles = {"USER"})
-    void testGetUserByIdWhenIdNotExist() throws Exception {
+    void testGetUserByIdWhenIDNotExist() throws Exception {
         String requestPath = "/api/users/2";
-        String errorMessage = "User with ID = 2 not found";
+        String errorMessage = "Пользователь с ID = 2 не найден";
 
         mockMvc.perform(get(requestPath)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
-                .andExpect(content().string(containsString(errorMessage)));
-    }
+                .andExpect(jsonPath("$.errorMessage").value(errorMessage));
 
+    }
 
     @Test
     @WithMockUser(username = "user", roles = {"USER"})
-    void testGetUserByIdWhenIdNotCorrect() throws Exception {
+    void testGetUserByIdWhenIDNotCorrect() throws Exception {
         String requestPath = "/api/users/2a";
-        String errorMessage = "id";
+        String errorMessage = "userId";
 
         mockMvc.perform(get(requestPath)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.parameter").value(errorMessage));
+
+
     }
+
 
 
 

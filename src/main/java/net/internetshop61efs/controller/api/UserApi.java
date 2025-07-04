@@ -1,5 +1,6 @@
 package net.internetshop61efs.controller.api;
 
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -11,12 +12,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 
 @RequestMapping("/api/users")
 public interface UserApi {
 
-    //*найти пользователя по ID
     @Operation(summary = "Получение информации о пользователе по ID")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Информация о пользователе",
@@ -25,14 +24,11 @@ public interface UserApi {
             @ApiResponse(responseCode = "404", description = "Пользователь не найден",
                     content = @Content(mediaType = "application/json",
                             schema = @Schema(implementation = ErrorResponseDto.class)))
-    }
-    )
-    @GetMapping("/{id}")
-    public ResponseEntity<UserResponseDto> findUserById(@PathVariable Integer id);
+    })
+    @GetMapping("/{userId}")
+    public ResponseEntity<UserResponseDto> getUserById(@PathVariable long userId);
 
-    //*найти пользователя по email
-    @GetMapping()
-    public ResponseEntity<UserResponseDto> findUserByEmail(@RequestParam String email);
 
+    // можно добавить updateUser
 
 }

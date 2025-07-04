@@ -4,15 +4,21 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
+import net.internetshop61efs.dto.MessageResponseDto;
 import net.internetshop61efs.entity.FileInfo;
 import net.internetshop61efs.entity.User;
 import net.internetshop61efs.repository.FileInfoRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
 @Service
@@ -20,69 +26,146 @@ import java.util.UUID;
 public class FileService {
 
     private final FileInfoRepository repository;
-    private final AmazonS3 amazonS3;
     private final UserService userService;
+    private final AmazonS3 amazonS3;
 
-    public String upload(MultipartFile file) throws IOException {
+    private final String LOCAL_STORAGE_PATH = "src/main/resources/static/upload";
 
-        String originalFileName = file.getOriginalFilename();
+    @SneakyThrows
+    @Transactional
+    public MessageResponseDto uploadLocalStorage(MultipartFile uploadFile) {
+
+        Path fileStorageLocation = Paths.get(LOCAL_STORAGE_PATH);
+
+        String newFileName = createFileName(uploadFile);
+
+        // создаем targetLocation который будет содержать полный путь до места хранения и имя файла
+        Path targetLocation = fileStorageLocation.resolve(newFileName);
+
+        // копируем данные из файла upload, который хранится во временном хранилище сервера
+        // в папку и под именем, которое мы создали
+
+        Files.copy(uploadFile.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+
+        String link = targetLocation.toString();
+
+
+        User currentUser = userService.getCurrentUser();
+
+        FileInfo fileInfo = new FileInfo();
+        fileInfo.setLink(link);
+        fileInfo.setUser(currentUser);
+        repository.save(fileInfo);
+
+        userService.setPhotoLink(link);
+
+        return new MessageResponseDto("Файл " + link + " успешно сохранен");
+
+    }
+
+    @Transactional
+    @SneakyThrows
+    public MessageResponseDto uploadDigitalOceanStorage(MultipartFile uploadFile){
+
+        String newFileName = createFileName(uploadFile);
+        // формат названия файла будет в формате UUID + "." + расширение исходного файла
+
+        // загрузка в хранилище digital Ocean
+
+        InputStream inputStream = uploadFile.getInputStream();
+        ObjectMetadata metadata = new ObjectMetadata();
+        metadata.setContentType(uploadFile.getContentType());
+
+        // создаем запрос на отправку файла
+
+        /*
+        варианты что может вернуть getContentType():
+
+        Изображения:
+        - image/jpeg
+        - image/png
+        - image/gif
+        ...
+
+        Не изображения:
+        text/plain - txt
+        text/html - html
+        ...
+
+        Документы:
+        application/pdf
+        application/msword
+        application/vnd.ms-excel
+        application/vnd.ms-powerpoint
+
+        Архивы:
+        application/zip
+        ...
+
+        Аудио
+        audio/mp3
+        audio/wav
+        ...
+
+        Видео
+        video/mp4
+        video/x-matroska (MKV)
+
+         */
+
+        String fileLink = "";
+
+        if (uploadFile.getContentType().startsWith("image")){
+            fileLink = "image/" + newFileName;
+        } else if (uploadFile.getContentType().startsWith("text")) {
+            fileLink = "data/" + newFileName;
+        }
+
+        String bucketName = "demo-shop-files";
+
+        PutObjectRequest request = new PutObjectRequest(
+                bucketName,
+                fileLink,
+                inputStream,
+                metadata
+        ).withCannedAcl(CannedAccessControlList.PublicRead);
+
+        amazonS3.putObject(request);
+
+        String digitalOceanLink = amazonS3.getUrl(bucketName, fileLink).toString();
+
+        User currentUser = userService.getCurrentUser();
+
+        FileInfo fileInfo = new FileInfo();
+        fileInfo.setLink(digitalOceanLink);
+        fileInfo.setUser(currentUser);
+        repository.save(fileInfo);
+
+        userService.setPhotoLink(digitalOceanLink);
+
+        return new MessageResponseDto("Файл " + digitalOceanLink + " успешно сохранен");
+
+    }
+
+    private String createFileName(MultipartFile uploadFile){
+        String originalFileName = uploadFile.getOriginalFilename();
         // получаем исходное имя файла
 
         String extension = "";
-
-        if (originalFileName != null){
+        if (originalFileName != null) {
             int indexExtension = originalFileName.lastIndexOf(".") + 1;
-            // получаем индекс начала расширения нашего файла
-
+            //получаем индекс начала расширения полученного файла (следующий символ за '.')
             extension = originalFileName.substring(indexExtension);
         } else {
             throw new NullPointerException("Null original file name");
         }
 
-        String uuid = UUID.randomUUID().toString();
-        String newFileName = uuid + "." + extension;
+        // генерируем случайное имя для файла с помощью UUID
+        String uuidFileName = UUID.randomUUID().toString();
+        String newFileName = uuidFileName + "." + extension;
 
-        // загрузка файла в Digital Ocean
-
-        InputStream inputStream = file.getInputStream();
-        ObjectMetadata metadata = new ObjectMetadata();
-        metadata.setContentType(file.getContentType());
-
-        // создаем запрос на отправку файла
-
-        PutObjectRequest request = new PutObjectRequest(
-                "demo-shop-files",
-                "data/" + newFileName,
-                inputStream,
-                metadata
-        ).withCannedAcl(CannedAccessControlList.PublicRead);
-
-        // выполение запроса - то есть файл ушел на сервер
-        amazonS3.putObject(request);
-
-        // сформировать ссылку на этот внешнее хранилище для нашего файла
-
-        String link = amazonS3.getUrl("demo-shop-files","data/" + newFileName).toString();
-
-        // сохраним эту ссылку у нас в БД
-        // мы должны получить данные о том user для кого этот файл предназначен
-        // эта опция (загрузка файла) будет доступна только зарегистрированным пользователям
-        // так как мы будем подключать Spring Security, то информация о том какой пользователь
-        // отправил нам запрос будет хранится в Security Context и мы от туда ее возьмем
-
-        // пока для текущего решения используем User с id = 1
-
-        User user = userService.findFullDetailsUserById(1);
-
-
-        FileInfo fileInfo = new FileInfo();
-        fileInfo.setLink(link);
-        fileInfo.setUser(user);
-
-        repository.save(fileInfo);
-
-        return "Файл " + link + " успешно сохранен";
-
+        return newFileName;
     }
+
 
 }

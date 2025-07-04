@@ -1,16 +1,17 @@
 package net.internetshop61efs.security.service;
 
 import lombok.RequiredArgsConstructor;
-import org.demointernetshop45efs.entity.User;
+import net.internetshop61efs.entity.User;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 
 @RequiredArgsConstructor
-public class MyUserToUserDetails implements UserDetails {
+public class UserToUserDetails implements UserDetails {
 
     private final User user;
 

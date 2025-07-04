@@ -13,5 +13,4 @@ import java.util.List;
 @Builder
 public class ValidationErrorsDto {
     private List<ValidationErrorDto> errors;
-
 }

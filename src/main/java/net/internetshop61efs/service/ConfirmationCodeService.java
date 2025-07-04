@@ -1,10 +1,11 @@
 package net.internetshop61efs.service;
 
 import lombok.RequiredArgsConstructor;
+import net.internetshop61efs.service.exception.NotFoundException;
+import org.springframework.beans.factory.annotation.Value;
 import net.internetshop61efs.entity.ConfirmationCode;
 import net.internetshop61efs.entity.User;
 import net.internetshop61efs.repository.ConfirmationCodeRepository;
-import net.internetshop61efs.service.exception.NotFoundException;
 import net.internetshop61efs.service.mail.MailUtil;
 import org.springframework.stereotype.Service;
 
@@ -15,83 +16,76 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class ConfirmationCodeService {
+    @Value("${confirmation.expiration.period}")
+    private int EXPIRATION_PERIOD;
 
     private final ConfirmationCodeRepository repository;
     private final MailUtil mailUtil;
 
-    private final int EXPIRATION_PERIOD = 1;
+    @Value("${confirmation.storage.path}")
+    private String LINK_PATH;
 
-    private final String LINK_PATH = "localhost:8080/api/code/confirmation?code=";
-
-    // ----------------------
-
-    public void confirmationCodeHandle(User newuser) {
-        ConfirmationCode confirmationCode = createConfirmationCode(newuser);
-        repository.save(confirmationCode);
-        // отправка кода по email
-        sendCodeByEmail(newuser, confirmationCode);
-    }
-
-    private void sendCodeByEmail(User newuser, ConfirmationCode confirmationCode) {
-
-        String link = LINK_PATH + confirmationCode.getCode();
-        String subject = "Code confirmation email";
-
-        System.out.println("для пользователя " + newuser.getEmail() + "отправили код по почте : " + confirmationCode.getCode());
-
-        mailUtil.sendMail(
-                newuser.getFirstName(),
-                newuser.getLastName(),
-                link,
-                subject,
-                newuser.getEmail()
-                );
-
-    }
-
-    private ConfirmationCode createConfirmationCode(User newuser) {
-
-        String code = generateConfirmationCode();
-
-        return ConfirmationCode.builder()
-                .code(code)
-                .user(newuser)
-                .expireDateTime(LocalDateTime.now().plusDays(EXPIRATION_PERIOD))
-                .build();
-    }
 
     private String generateConfirmationCode() {
-        /*
-        UUID - universal unique identifier
-        формат 128 bit
-        xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-        где каждый символ 'x' - это либо цифра либо символ от a-f
-        3f29c3b2-9fc2-11ed-a8fc-0242ac120002
-         */
-        return UUID.randomUUID().toString();
+        String code = UUID.randomUUID().toString();
+        return code;
+    }
+
+    public void saveConfirmationCode(User newUser) {
+
+        ConfirmationCode confirmationCode = createConfirmationCode(newUser);
+
+        repository.save(confirmationCode);
+
+        sendCodeByEmail(newUser, confirmationCode.getCode()); //- отправка кода по почте
 
     }
 
-    //------- поиск данных о коде при его подтверждении ------
+    private void sendCodeByEmail(User user, String code) {
+        String link = LINK_PATH + code;
+        String subject = "Code confirmation email";
 
-    public ConfirmationCode findCodeInDatabase(String code){
-        ConfirmationCode confirmationCode =
-                repository.findByCodeAndExpireDateTimeAfter(code, LocalDateTime.now())
-                        .orElseThrow(() -> new NotFoundException("Код подтерждения не найден или его срок действия истек"));
+        System.out.println("Что у нас в USER " + user);
+
+        mailUtil.send(
+                user.getFirstName(),
+                user.getLastName(),
+                link,
+                subject,
+                user.getEmail()
+        );
+    }
+
+    private ConfirmationCode createConfirmationCode(User newUser) {
+        String code = generateConfirmationCode();
+
+        ConfirmationCode confirmationCode = ConfirmationCode.builder()
+                .code(code)
+                .user(newUser)
+                .expiredDataTime(LocalDateTime.now().plusDays(EXPIRATION_PERIOD))
+                .build();
 
         return confirmationCode;
     }
 
+    public User findCodeInDatabase(String code) {
+        ConfirmationCode confirmationCode =
+                repository.findByCodeAndExpiredDataTimeAfter(code, LocalDateTime.now())
+                        .orElseThrow(() -> new NotFoundException("Код подтверждения не найден или его срок действия истек"));
 
-    public List<ConfirmationCode> findCodesByUser(User user) {
+        return confirmationCode.getUser();
+
+    }
+
+    public List<ConfirmationCode> findCodesByUser(User user){
         return repository.findByUser(user);
     }
 
+    public void confirmStatus(String codeString){
+        ConfirmationCode code = repository.findByCode(codeString)
+                .orElseThrow(()-> new NotFoundException("Code : " + codeString + " not found"));
 
-    public void changeConfirmStatus(String code){
-        ConfirmationCode confirmationCode = findCodeInDatabase(code);
-        confirmationCode.setConfirmed(true);
-        repository.save(confirmationCode);
+        code.setConfirmed(true);
+        repository.save(code);
     }
-
 }

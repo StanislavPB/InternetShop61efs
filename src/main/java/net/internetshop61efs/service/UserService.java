@@ -1,6 +1,9 @@
 package net.internetshop61efs.service;
 
+
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import net.internetshop61efs.dto.MessageResponseDto;
 import net.internetshop61efs.dto.UserRequestDto;
 import net.internetshop61efs.dto.UserResponseDto;
 import net.internetshop61efs.entity.ConfirmationCode;
@@ -8,131 +11,110 @@ import net.internetshop61efs.entity.User;
 import net.internetshop61efs.repository.UserRepository;
 import net.internetshop61efs.service.exception.AlreadyExistException;
 import net.internetshop61efs.service.exception.NotFoundException;
-import net.internetshop61efs.service.util.Converter;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
-    private final UserRepository repository;
-    private final Converter converter;
+    private final UserRepository userRepository;
     private final ConfirmationCodeService confirmationCodeService;
+    private final Converter converter;
 
-    public UserResponseDto registration(UserRequestDto request){
-        /*
-        1) проверить а нет ли уже такого пользователя
-        2) создать нового пользователя используя данные из request
-        3) дополнить нового пользователя данными из системы )роль, время создания и тд)
-        4) сохранить
-        5) отправить код подтверждения
-         */
 
-        if (repository.existsByEmail(request.getEmail())) {
-            throw new AlreadyExistException("User with email: " + request.getEmail() + " is already exist");
+    @Transactional
+    public UserResponseDto registration(UserRequestDto request) {
+
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new AlreadyExistException("Пользователь с email: " + request.getEmail() + " уже зарегистрирован");
         }
 
-        // ----- а вот если такого пользователя еще нет -----
+//        User user = User.builder()
+//                .email(request.getEmail())
+//                .firstName(request.getFirstName())
+//                .secondName(request.getSecondName())
+//                .hashPassword(request.getHashPassword())
+//                .role(User.Role.USER)
+//                .state(User.State.NOT_CONFIRMED)
+//                .build();
 
-        User newUser = converter.fromDto(request);
+        User user = converter.fromDto(request);
+        user.setRole(User.Role.USER);
+        user.setState(User.State.NOT_CONFIRMED);
 
-        newUser.setRole(User.Role.USER);
-        newUser.setStatus(User.Status.NOT_CONFIRMED);
+        userRepository.save(user);
 
-        User savedUser = repository.save(newUser);
+        confirmationCodeService.saveConfirmationCode(user);
 
-        // после создания новго пользователя необходимо создать
-        // новый код подтверждения для него и отправить ему на почту
-
-        confirmationCodeService.confirmationCodeHandle(savedUser);
-
-        return converter.toDto(savedUser);
+        return converter.fromUser(user);
     }
 
-    public List<UserResponseDto> findAllUsers(){
-        List<User> users = repository.findAll();
-        List<UserResponseDto> responses = converter.fromUsers(users);
-        return responses;
+    public List<UserResponseDto> findAll() {
+        return converter.fromUser(userRepository.findAll());
     }
 
-    public UserResponseDto findUserById(Integer id){
-        User user = repository.findById(id)
-                .orElseThrow(() -> new NotFoundException("user with id = " + id + " not found"));
-        return converter.toDto(user);
+    public UserResponseDto getUserById(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("Пользователь с ID = " + userId + " не найден"));
+        return converter.fromUser(user);
     }
 
-    public UserResponseDto findUserByEmail(String email){
-        User user = repository.findByEmail(email)
-                .orElseThrow(() -> new NotFoundException("user with email : " + email + " not found"));
-        return converter.toDto(user);
+    public List<User> findAllFullDetails() {
+        return userRepository.findAll();
     }
 
-    public List<User> findFullDetailsUsers(){
-        return repository.findAll();
+    @Transactional
+    public UserResponseDto confirmation(String confirmationCode) {
+
+        User user = confirmationCodeService.findCodeInDatabase(confirmationCode);
+
+        user.setState(User.State.CONFIRMED);
+
+        userRepository.save(user);
+
+        confirmationCodeService.confirmStatus(confirmationCode);
+
+        return converter.fromUser(user);
     }
 
-    public User findFullDetailsUserById( Integer id){
-        return repository.findById(id).get(); // !!!!!!!! временно делаем без проверки на null !!!!!!
+    public User findByEmail(String email) {
+        Optional<User> optionalUser = userRepository.findByEmail(email);
+        if (optionalUser.isPresent()) {
+            return optionalUser.get();
+        } else {
+            throw new NotFoundException("User with email " + email + " not found");
+        }
     }
 
-
-    // -------- действия при получении запрос о подтверждении почты -------
-
-    public UserResponseDto confirmationEmail(String code){
-        ConfirmationCode confirmationCode = confirmationCodeService.findCodeInDatabase(code);
-        User user = confirmationCode.getUser();
-        confirmationCodeService.changeConfirmStatus(code);
-        user.setStatus(User.Status.CONFIRMED);
-        repository.save(user);
-
-        return converter.toDto(user);
+    public MessageResponseDto setPhotoLink(String fileLink) {
+        User currentUser = getCurrentUser();
+        currentUser.setPhotoLink(fileLink);
+        userRepository.save(currentUser);
+        return new MessageResponseDto("Ссылка на файл успешно обновлена");
     }
 
-    public UserResponseDto updateUser(UserRequestDto updateRequest){
-        String userEmail = updateRequest.getEmail();
+    public User getCurrentUser() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
-        if (userEmail == null || userEmail.isBlank()) {
-            throw new IllegalArgumentException("Email must be provide to update user");
+        String email;
+
+        if (principal instanceof UserDetails) {
+            email = ((UserDetails) principal).getUsername();
+        } else {
+            email = principal.toString();
         }
 
-        // найдем пользователя по email
-
-        User userByEmail = repository.findByEmail(userEmail)
-                .orElseThrow(() -> new NotFoundException("User with email:" + userEmail + " not found"));
-
-        /*
-        обновляем ВСЕ доступные поля
-        Так как мы заранее НЕ ЗНАЕМ, а какие именно поля пользоваетель захочет поменять,
-        то есть в JSON (в теле запроса), будут находиться только ТЕ поля (со знаячениями),
-        которые пользователь хочет поменять (не обязательно все)
-         */
-
-        if (updateRequest.getFirstName() != null && !updateRequest.getFirstName().isBlank()) {
-            userByEmail.setFirstName(updateRequest.getFirstName());
-        }
-
-        if (updateRequest.getLastName() != null && !updateRequest.getLastName().isBlank()) {
-            userByEmail.setLastName(updateRequest.getLastName());
-        }
-
-        if (updateRequest.getPassword() != null && !updateRequest.getPassword().isBlank()) {
-            userByEmail.setHashPassword(updateRequest.getPassword());
-        }
-
-        // созраняем (обновляем) пользователя
-
-        repository.save(userByEmail);
-
-        return converter.toDto(userByEmail);
+        return findByEmail(email);
     }
 
-    public boolean renewCode(String email){
-        User user = repository.findByEmail(email)
-                .orElseThrow(() -> new NotFoundException("User with email: " + email + "not found"));
-
-        confirmationCodeService.confirmationCodeHandle(user);
-        return true;
+    public List<ConfirmationCode> findCodesByEmail(String email){
+        User user = findByEmail(email);
+        return confirmationCodeService.findCodesByUser(user);
     }
+
 }
